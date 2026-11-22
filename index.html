@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard SIPD & Pengaruh PDRB — Provinsi Jambi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a; }
+    .tab-btn.active { background: #0f172a; color: #fff; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+    .growth-pos { color: #059669; background: #ecfdf5; }
+    .growth-neg { color: #dc2626; background: #fef2f2; }
+    .growth-neu { color: #475569; background: #f1f5f9; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="bg-slate-900 text-white sticky top-0 z-30 shadow">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold">PELITA Kemendagri · Provinsi Jambi</div>
+        <h1 class="text-xl font-bold">Dashboard Monitoring SIPD & Pengaruh PDRB</h1>
+      </div>
+      <nav class="flex flex-wrap gap-2" id="nav-tabs">
+        <button class="tab-btn active px-3.5 py-2 rounded-lg text-sm font-medium transition" data-tab="provinsi">Pantauan Provinsi</button>
+        <button class="tab-btn px-3.5 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 transition" data-tab="kabkota">Detail Kab/Kota</button>
+        <button class="tab-btn px-3.5 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 transition" data-tab="pdrb">Pengaruh PDRB (PKP & Lapus)</button>
+        <button class="tab-btn px-3.5 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 transition" data-tab="apbd">APBD 2026 & Desa</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div id="loading" class="card p-8 text-center text-slate-500">Memuat data SIPD Provinsi Jambi...</div>
+
+    <!-- TAB 1: PANTAUAN PROVINSI -->
+    <section id="tab-provinsi" class="hidden space-y-6">
+      <div class="card p-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="text-sm font-medium text-slate-600">Indikator:</label>
+          <select id="prov-metric" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="total_pendapatan_daerah">Total Pendapatan Daerah</option>
+            <option value="total_pad">Total PAD</option>
+            <option value="pad_retribusi">PAD Retribusi</option>
+            <option value="total_belanja_operasi">Total Belanja Operasi</option>
+            <option value="belanja_pegawai">Belanja Pegawai</option>
+            <option value="belanja_barang_dan_jasa">Belanja Barang & Jasa</option>
+            <option value="bantuan_sosial">Bantuan Sosial</option>
+            <option value="total_belanja_modal">Total Belanja Modal</option>
+          </select>
+        </div>
+        <div class="text-xs text-slate-500">Sumber: Realisasi SIPD 2023–2025 (12 Wilayah)</div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="prov-kpis"></div>
+
+      <div class="card p-5">
+        <h2 class="text-base font-semibold mb-1" id="prov-chart-title">Perbandingan Seluruh Kab/Kota (2023–2025)</h2>
+        <p class="text-xs text-slate-500 mb-4">Nilai dalam Miliar Rupiah (Rp M)</p>
+        <div class="h-80"><canvas id="chart-prov"></canvas></div>
+      </div>
+
+      <div class="card p-5 overflow-x-auto">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold">Tabel Pergerakan & Growth YoY Seluruh Kab/Kota</h2>
+          <input id="prov-search" type="text" placeholder="Cari wilayah..." class="border border-slate-300 rounded-lg px-3 py-1 text-sm" />
+        </div>
+        <table class="w-full text-sm text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-600 bg-slate-50">
+              <th class="py-2.5 px-3">Wilayah</th>
+              <th class="py-2.5 px-3 text-right">2023 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">2024 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">Growth 24</th>
+              <th class="py-2.5 px-3 text-right">2025 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">Growth 25</th>
+            </tr>
+          </thead>
+          <tbody id="prov-table-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 2: DETAIL KAB/KOTA -->
+    <section id="tab-kabkota" class="hidden space-y-6">
+      <div class="card p-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-medium text-slate-600">Pilih Wilayah:</label>
+          <select id="kab-select" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white font-medium"></select>
+        </div>
+        <div class="text-xs text-slate-500">Pantau pergerakan komponen pendapatan & belanja 2023–2025</div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kab-kpis"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="card p-5">
+          <h2 class="text-base font-semibold mb-1">Tren Utama 2023–2025 (Rp Miliar)</h2>
+          <p class="text-xs text-slate-500 mb-3">Pendapatan Daerah, Belanja Operasi, Belanja Modal</p>
+          <div class="h-72"><canvas id="chart-kab-trend"></canvas></div>
+        </div>
+        <div class="card p-5">
+          <h2 class="text-base font-semibold mb-1">Komposisi Belanja 2025 (Rp Miliar)</h2>
+          <p class="text-xs text-slate-500 mb-3">Pegawai, Barang & Jasa, Modal, Bansos, Hibah</p>
+          <div class="h-72"><canvas id="chart-kab-comp"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card p-5 overflow-x-auto">
+        <h2 class="text-base font-semibold mb-3">Rincian Komponen & Growth YoY</h2>
+        <table class="w-full text-sm text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-600 bg-slate-50">
+              <th class="py-2.5 px-3">Komponen</th>
+              <th class="py-2.5 px-3 text-right">2023 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">2024 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">Growth 24</th>
+              <th class="py-2.5 px-3 text-right">2025 (Rp M)</th>
+              <th class="py-2.5 px-3 text-right">Growth 25</th>
+            </tr>
+          </thead>
+          <tbody id="kab-table-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: PENGARUH PDRB (PKP & LAPUS) -->
+    <section id="tab-pdrb" class="hidden space-y-6">
+      <div class="card p-5 space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Analisis Pengaruh PDRB: PKP & Lapangan Usaha (Lapus)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Estimasi kontribusi dan pertumbuhan komponen belanja pemerintah terhadap PDRB pengeluaran (PKP) dan PDRB lapangan usaha (Lapus).</p>
+          </div>
+          <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2">
+            <label class="text-xs font-semibold text-slate-700 whitespace-nowrap">Rasio Penyusutan (dari Belanja Modal):</label>
+            <input id="dep-rate" type="range" min="0" max="100" step="5" value="100" class="w-28 accent-slate-900" />
+            <span id="dep-rate-val" class="text-sm font-bold text-slate-900 w-12 text-right">100%</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-900">
+            <span class="font-bold">Rumus PKP (Pengeluaran Konsumsi Pemerintah):</span><br/>
+            <code>Belanja Pegawai + (Belanja Modal × Rasio Penyusutan) + Belanja Barang & Jasa + Bantuan Sosial − PAD Retribusi</code>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-emerald-900">
+            <span class="font-bold">Rumus Lapus (Adm. Pemerintahan / Sisi Produksi):</span><br/>
+            <code>Belanja Pegawai + (Belanja Modal × Rasio Penyusutan)</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="pdrb-kpis"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="card p-5">
+          <h2 class="text-base font-semibold mb-1">Growth PKP 2025 (% YoY) per Kab/Kota</h2>
+          <p class="text-xs text-slate-500 mb-3">Pertumbuhan estimasi PKP 2025 dibandingkan 2024</p>
+          <div class="h-72"><canvas id="chart-pkp-growth"></canvas></div>
+        </div>
+        <div class="card p-5">
+          <h2 class="text-base font-semibold mb-1">Growth Lapus 2025 (% YoY) per Kab/Kota</h2>
+          <p class="text-xs text-slate-500 mb-3">Pertumbuhan estimasi Lapus 2025 dibandingkan 2024</p>
+          <div class="h-72"><canvas id="chart-lapus-growth"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card p-5 overflow-x-auto">
+        <h2 class="text-base font-semibold mb-3">Tabel Lengkap Estimasi PKP & Lapus Seluruh Kab/Kota (Rp Miliar)</h2>
+        <table class="w-full text-xs sm:text-sm text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-600 bg-slate-50">
+              <th class="py-2.5 px-2">Wilayah</th>
+              <th class="py-2.5 px-2 text-right">PKP 2023</th>
+              <th class="py-2.5 px-2 text-right">PKP 2024</th>
+              <th class="py-2.5 px-2 text-right">PKP 2025</th>
+              <th class="py-2.5 px-2 text-right">Gr. PKP 25</th>
+              <th class="py-2.5 px-2 text-right">Lapus 2023</th>
+              <th class="py-2.5 px-2 text-right">Lapus 2024</th>
+              <th class="py-2.5 px-2 text-right">Lapus 2025</th>
+              <th class="py-2.5 px-2 text-right">Gr. Lapus 25</th>
+            </tr>
+          </thead>
+          <tbody id="pdrb-table-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: APBD 2026 & DESA -->
+    <section id="tab-apbd" class="hidden space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="apbd-kpis"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="card p-5">
+          <h2 class="text-base font-semibold mb-1">APBD 2026 Provinsi Jambi — Top 10 SKPD (Rp Miliar)</h2>
+          <p class="text-xs text-slate-500 mb-3">Berdasarkan 27.829 rincian sub-kegiatan SIPD 2026</p>
+          <div class="h-80"><canvas id="chart-apbd-skpd"></canvas></div>
+        </div>
+        <div class="card p-5 overflow-x-auto">
+          <h2 class="text-base font-semibold mb-1">Anggaran Desa per Kabupaten (2024 vs 2026)</h2>
+          <p class="text-xs text-slate-500 mb-3">Total Belanja Desa (Rp Miliar) — Sumber: PELITA Desa</p>
+          <table class="w-full text-sm text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-600 bg-slate-50">
+                <th class="py-2 px-2">Kabupaten</th>
+                <th class="py-2 px-2 text-right">Belanja 2024</th>
+                <th class="py-2 px-2 text-right">Realisasi 2024</th>
+                <th class="py-2 px-2 text-right">Belanja 2026</th>
+                <th class="py-2 px-2 text-right">Realisasi 2026</th>
+              </tr>
+            </thead>
+            <tbody id="desa-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-400">
+    Data bersumber dari portal publik PELITA Kemendagri (pelita.kemendagri.go.id). Estimasi PKP & Lapus bersifat analitik untuk pemantauan tren.
+  </footer>
+
+  <script>
+    let DATA = null;
+    const CHARTS = {};
+
+    const fmtM = (v) => ((Number(v) || 0) / 1e9).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtT = (v) => ((Number(v) || 0) / 1e12).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const growth = (curr, prev) => (!prev || prev === 0) ? null : ((curr - prev) / Math.abs(prev)) * 100;
+    const growthBadge = (g) => {
+      if (g === null || isNaN(g)) return '<span class="px-2 py-0.5 rounded text-xs font-medium growth-neu">—</span>';
+      const cls = g > 0 ? 'growth-pos' : (g < 0 ? 'growth-neg' : 'growth-neu');
+      const sign = g > 0 ? '+' : '';
+      return `<span class="px-2 py-0.5 rounded text-xs font-semibold ${cls}">${sign}${g.toFixed(2)}%</span>`;
+    };
+
+    function getRegionMap(year) {
+      const m = {};
+      (DATA.realisasi[String(year)] || []).forEach(r => { m[r.nama_wilayah] = r; });
+      return m;
+    }
+
+    function getRegions() {
+      return (DATA.realisasi['2025'] || []).map(r => r.nama_wilayah);
+    }
+
+    function calcPDRB(row, depRatio) {
+      if (!row) return { pkp: 0, lapus: 0 };
+      const peg = Number(row.belanja_pegawai) || 0;
+      const mod = (Number(row.total_belanja_modal) || 0) * depRatio;
+      const bar = Number(row.belanja_barang_dan_jasa) || 0;
+      const sos = Number(row.bantuan_sosial) || 0;
+      const ret = Number(row.pad_retribusi) || 0;
+      return {
+        pkp: peg + mod + bar + sos - ret,
+        lapus: peg + mod
+      };
+    }
+
+    function makeChart(id, cfg) {
+      if (CHARTS[id]) CHARTS[id].destroy();
+      CHARTS[id] = new Chart(document.getElementById(id), cfg);
+    }
+
+    function renderProvinsi() {
+      const metric = document.getElementById('prov-metric').value;
+      const metricLabel = document.getElementById('prov-metric').selectedOptions[0].text;
+      const search = (document.getElementById('prov-search').value || '').toLowerCase();
+      const r23 = getRegionMap(2023), r24 = getRegionMap(2024), r25 = getRegionMap(2025);
+      const regions = getRegions();
+
+      let sum23 = 0, sum24 = 0, sum25 = 0;
+      regions.forEach(w => {
+        sum23 += Number(r23[w]?.[metric]) || 0;
+        sum24 += Number(r24[w]?.[metric]) || 0;
+        sum25 += Number(r25[w]?.[metric]) || 0;
+      });
+      const g24 = growth(sum24, sum23), g25 = growth(sum25, sum24);
+
+      document.getElementById('prov-kpis').innerHTML = `
+        <div class="card p-4"><div class="text-xs text-slate-500">Agregat 12 Wilayah (2023)</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(sum23)} T</div><div class="text-xs text-slate-400 mt-1">${metricLabel}</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Agregat 12 Wilayah (2024)</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(sum24)} T</div><div class="mt-1">${growthBadge(g24)} vs 2023</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Agregat 12 Wilayah (2025)</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(sum25)} T</div><div class="mt-1">${growthBadge(g25)} vs 2024</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Jumlah Wilayah Terpantau</div><div class="text-2xl font-bold mt-1">${regions.length}</div><div class="text-xs text-slate-400 mt-1">1 Provinsi + 11 Kab/Kota</div></div>
+      `;
+
+      document.getElementById('prov-chart-title').textContent = `${metricLabel} — Seluruh Kab/Kota (2023–2025)`;
+      makeChart('chart-prov', {
+        type: 'bar',
+        data: {
+          labels: regions.map(w => w.replace('Kabupaten ', 'Kab. ')),
+          datasets: [
+            { label: '2023', data: regions.map(w => (Number(r23[w]?.[metric]) || 0) / 1e9), backgroundColor: '#94a3b8' },
+            { label: '2024', data: regions.map(w => (Number(r24[w]?.[metric]) || 0) / 1e9), backgroundColor: '#3b82f6' },
+            { label: '2025', data: regions.map(w => (Number(r25[w]?.[metric]) || 0) / 1e9), backgroundColor: '#0f172a' }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+      });
+
+      const tbody = document.getElementById('prov-table-body');
+      tbody.innerHTML = regions.filter(w => w.toLowerCase().includes(search)).map(w => {
+        const v23 = Number(r23[w]?.[metric]) || 0;
+        const v24 = Number(r24[w]?.[metric]) || 0;
+        const v25 = Number(r25[w]?.[metric]) || 0;
+        return `<tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-3 font-medium">${w}</td>
+          <td class="py-2.5 px-3 text-right">${fmtM(v23)}</td>
+          <td class="py-2.5 px-3 text-right">${fmtM(v24)}</td>
+          <td class="py-2.5 px-3 text-right">${growthBadge(growth(v24, v23))}</td>
+          <td class="py-2.5 px-3 text-right font-semibold">${fmtM(v25)}</td>
+          <td class="py-2.5 px-3 text-right">${growthBadge(growth(v25, v24))}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderKabKota() {
+      const w = document.getElementById('kab-select').value;
+      const d23 = getRegionMap(2023)[w] || {}, d24 = getRegionMap(2024)[w] || {}, d25 = getRegionMap(2025)[w] || {};
+
+      const kpiItems = [
+        ['Total Pendapatan 2025', d25.total_pendapatan_daerah, d24.total_pendapatan_daerah],
+        ['Total PAD 2025', d25.total_pad, d24.total_pad],
+        ['Belanja Operasi 2025', d25.total_belanja_operasi, d24.total_belanja_operasi],
+        ['Belanja Modal 2025', d25.total_belanja_modal, d24.total_belanja_modal]
+      ];
+      document.getElementById('kab-kpis').innerHTML = kpiItems.map(([lbl, v25, v24]) => `
+        <div class="card p-4">
+          <div class="text-xs text-slate-500">${lbl}</div>
+          <div class="text-2xl font-bold mt-1">Rp ${fmtM(v25)} M</div>
+          <div class="mt-1">${growthBadge(growth(Number(v25)||0, Number(v24)||0))} vs 2024</div>
+        </div>
+      `).join('');
+
+      makeChart('chart-kab-trend', {
+        type: 'line',
+        data: {
+          labels: ['2023', '2024', '2025'],
+          datasets: [
+            { label: 'Pendapatan Daerah', data: [d23.total_pendapatan_daerah, d24.total_pendapatan_daerah, d25.total_pendapatan_daerah].map(v => (Number(v)||0)/1e9), borderColor: '#0f172a', backgroundColor: '#0f172a', tension: 0.25 },
+            { label: 'Belanja Operasi', data: [d23.total_belanja_operasi, d24.total_belanja_operasi, d25.total_belanja_operasi].map(v => (Number(v)||0)/1e9), borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.25 },
+            { label: 'Belanja Modal', data: [d23.total_belanja_modal, d24.total_belanja_modal, d25.total_belanja_modal].map(v => (Number(v)||0)/1e9), borderColor: '#059669', backgroundColor: '#059669', tension: 0.25 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+
+      makeChart('chart-kab-comp', {
+        type: 'doughnut',
+        data: {
+          labels: ['Belanja Pegawai', 'Barang & Jasa', 'Belanja Modal', 'Hibah', 'Bantuan Sosial'],
+          datasets: [{
+            data: [d25.belanja_pegawai, d25.belanja_barang_dan_jasa, d25.total_belanja_modal, d25.hibah, d25.bantuan_sosial].map(v => (Number(v)||0)/1e9),
+            backgroundColor: ['#0f172a', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+      });
+
+      const comps = [
+        ['Total Pendapatan Daerah', 'total_pendapatan_daerah'],
+        ['Total PAD', 'total_pad'],
+        ['PAD Pajak', 'pad_pajak'],
+        ['PAD Retribusi', 'pad_retribusi'],
+        ['Total Pendapatan Transfer', 'total_pendapatan_transfer'],
+        ['Total Belanja Operasi', 'total_belanja_operasi'],
+        ['Belanja Pegawai', 'belanja_pegawai'],
+        ['Belanja Barang & Jasa', 'belanja_barang_dan_jasa'],
+        ['Bantuan Sosial', 'bantuan_sosial'],
+        ['Hibah', 'hibah'],
+        ['Total Belanja Modal', 'total_belanja_modal']
+      ];
+      document.getElementById('kab-table-body').innerHTML = comps.map(([lbl, k]) => {
+        const v23 = Number(d23[k])||0, v24 = Number(d24[k])||0, v25 = Number(d25[k])||0;
+        return `<tr class="hover:bg-slate-50">
+          <td class="py-2 px-3 font-medium">${lbl}</td>
+          <td class="py-2 px-3 text-right">${fmtM(v23)}</td>
+          <td class="py-2 px-3 text-right">${fmtM(v24)}</td>
+          <td class="py-2 px-3 text-right">${growthBadge(growth(v24, v23))}</td>
+          <td class="py-2 px-3 text-right font-semibold">${fmtM(v25)}</td>
+          <td class="py-2 px-3 text-right">${growthBadge(growth(v25, v24))}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderPDRB() {
+      const depPct = Number(document.getElementById('dep-rate').value);
+      document.getElementById('dep-rate-val').textContent = depPct + '%';
+      const depRatio = depPct / 100;
+
+      const r23 = getRegionMap(2023), r24 = getRegionMap(2024), r25 = getRegionMap(2025);
+      const regions = getRegions();
+
+      let totPkp24 = 0, totPkp25 = 0, totLap24 = 0, totLap25 = 0;
+      const rows = regions.map(w => {
+        const c23 = calcPDRB(r23[w], depRatio);
+        const c24 = calcPDRB(r24[w], depRatio);
+        const c25 = calcPDRB(r25[w], depRatio);
+        totPkp24 += c24.pkp; totPkp25 += c25.pkp;
+        totLap24 += c24.lapus; totLap25 += c25.lapus;
+        return {
+          w,
+          pkp23: c23.pkp, pkp24: c24.pkp, pkp25: c25.pkp, gPkp25: growth(c25.pkp, c24.pkp),
+          lap23: c23.lapus, lap24: c24.lapus, lap25: c25.lapus, gLap25: growth(c25.lapus, c24.lapus)
+        };
+      });
+
+      document.getElementById('pdrb-kpis').innerHTML = `
+        <div class="card p-4"><div class="text-xs text-slate-500">Agregat PKP 2025 (12 Wilayah)</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(totPkp25)} T</div><div class="mt-1">${growthBadge(growth(totPkp25, totPkp24))} vs 2024</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Agregat Lapus 2025 (12 Wilayah)</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(totLap25)} T</div><div class="mt-1">${growthBadge(growth(totLap25, totLap24))} vs 2024</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Wilayah PKP Tumbuh Positif</div><div class="text-2xl font-bold mt-1">${rows.filter(r => r.gPkp25 > 0).length} / ${rows.length}</div><div class="text-xs text-slate-400 mt-1">Tahun 2025 vs 2024</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Wilayah Lapus Tumbuh Positif</div><div class="text-2xl font-bold mt-1">${rows.filter(r => r.gLap25 > 0).length} / ${rows.length}</div><div class="text-xs text-slate-400 mt-1">Tahun 2025 vs 2024</div></div>
+      `;
+
+      makeChart('chart-pkp-growth', {
+        type: 'bar',
+        data: {
+          labels: rows.map(r => r.w),
+          datasets: [{
+            label: 'Growth PKP 2025 (%)',
+            data: rows.map(r => r.gPkp25 ? Number(r.gPkp25.toFixed(2)) : 0),
+            backgroundColor: rows.map(r => (r.gPkp25 || 0) >= 0 ? '#2563eb' : '#ef4444')
+          }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      makeChart('chart-lapus-growth', {
+        type: 'bar',
+        data: {
+          labels: rows.map(r => r.w),
+          datasets: [{
+            label: 'Growth Lapus 2025 (%)',
+            data: rows.map(r => r.gLap25 ? Number(r.gLap25.toFixed(2)) : 0),
+            backgroundColor: rows.map(r => (r.gLap25 || 0) >= 0 ? '#059669' : '#ef4444')
+          }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      document.getElementById('pdrb-table-body').innerHTML = rows.map(r => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2 px-2 font-medium">${r.w}</td>
+          <td class="py-2 px-2 text-right">${fmtM(r.pkp23)}</td>
+          <td class="py-2 px-2 text-right">${fmtM(r.pkp24)}</td>
+          <td class="py-2 px-2 text-right font-semibold">${fmtM(r.pkp25)}</td>
+          <td class="py-2 px-2 text-right">${growthBadge(r.gPkp25)}</td>
+          <td class="py-2 px-2 text-right">${fmtM(r.lap23)}</td>
+          <td class="py-2 px-2 text-right">${fmtM(r.lap24)}</td>
+          <td class="py-2 px-2 text-right font-semibold">${fmtM(r.lap25)}</td>
+          <td class="py-2 px-2 text-right">${growthBadge(r.gLap25)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderAPBD() {
+      const a = DATA.apbd2026;
+      const d24 = DATA.desa['2024'] || {}, d26 = DATA.desa['2026'] || {};
+      const totDesa24 = Object.values(d24).reduce((s, x) => s + (x.belanja_angg || 0), 0);
+      const totDesa26 = Object.values(d26).reduce((s, x) => s + (x.belanja_angg || 0), 0);
+
+      document.getElementById('apbd-kpis').innerHTML = `
+        <div class="card p-4"><div class="text-xs text-slate-500">Total APBD 2026 Provinsi Jambi</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(a.total)} T</div><div class="text-xs text-slate-400 mt-1">${a.rows.toLocaleString('id-ID')} rincian sub-kegiatan</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Total Belanja Desa 2024</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(totDesa24)} T</div><div class="text-xs text-slate-400 mt-1">${Object.keys(d24).length} Kabupaten</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Total Belanja Desa 2026</div><div class="text-2xl font-bold mt-1">Rp ${fmtT(totDesa26)} T</div><div class="text-xs text-slate-400 mt-1">${Object.keys(d26).length} Kabupaten</div></div>
+      `;
+
+      const top10 = a.top_skpd.slice(0, 10);
+      makeChart('chart-apbd-skpd', {
+        type: 'bar',
+        data: {
+          labels: top10.map(x => x.name.length > 35 ? x.name.slice(0, 35) + '…' : x.name),
+          datasets: [{ label: 'Anggaran 2026 (Rp M)', data: top10.map(x => x.total / 1e9), backgroundColor: '#0f172a' }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      const kabs = Array.from(new Set([...Object.keys(d24), ...Object.keys(d26)])).sort();
+      document.getElementById('desa-table-body').innerHTML = kabs.map(k => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2 px-2 font-medium">${k}</td>
+          <td class="py-2 px-2 text-right">${fmtM(d24[k]?.belanja_angg || 0)}</td>
+          <td class="py-2 px-2 text-right">${fmtM(d24[k]?.belanja_real || 0)}</td>
+          <td class="py-2 px-2 text-right font-semibold">${fmtM(d26[k]?.belanja_angg || 0)}</td>
+          <td class="py-2 px-2 text-right">${fmtM(d26[k]?.belanja_real || 0)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('#nav-tabs .tab-btn').forEach(b => {
+        const active = b.dataset.tab === tab;
+        b.classList.toggle('active', active);
+        b.classList.toggle('bg-slate-800', !active);
+      });
+      ['provinsi', 'kabkota', 'pdrb', 'apbd'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+      });
+    }
+
+    document.querySelectorAll('#nav-tabs .tab-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+    document.getElementById('prov-metric').addEventListener('change', renderProvinsi);
+    document.getElementById('prov-search').addEventListener('input', renderProvinsi);
+    document.getElementById('kab-select').addEventListener('change', renderKabKota);
+    document.getElementById('dep-rate').addEventListener('input', renderPDRB);
+
+    fetch('./data.json')
+      .then(r => r.json())
+      .then(d => {
+        DATA = d;
+        document.getElementById('loading').classList.add('hidden');
+        const sel = document.getElementById('kab-select');
+        sel.innerHTML = getRegions().map(w => `<option value="${w}">${w}</option>`).join('');
+        renderProvinsi();
+        renderKabKota();
+        renderPDRB();
+        renderAPBD();
+        switchTab('provinsi');
+      })
+      .catch(err => {
+        document.getElementById('loading').textContent = 'Gagal memuat data: ' + err.message;
+      });
+  </script>
+</body>
+</html>
